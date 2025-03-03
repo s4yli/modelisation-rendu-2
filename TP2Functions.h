@@ -5,11 +5,8 @@
 #include <math.h>
 #include <errno.h>
 #include <time.h>
-#include<ilcplex/cplex.h>
+#include <ilcplex/cplex.h>
 #include <assert.h>
-
-
-
 
 //IP Mproblem structure
 typedef struct IP_problem
