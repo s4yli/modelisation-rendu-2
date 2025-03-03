@@ -1,4 +1,3 @@
-*.o
-TP2
 multiDKnapsack.lp
 multiDKnapsack.sol
+/build

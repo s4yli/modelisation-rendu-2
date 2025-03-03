@@ -65,7 +65,7 @@ OBJS = $(SRC:%.c=$(OBJ_DIR)/%.o)
 ADDLIBS = -L$(CPLEXLIBDIR) -lilocplex -lcplex -m64 -lm -lpthread -ldl
 
 # Ajouter le fichier avec `main` manuellement
-MAIN_OBJ = $(OBJ_DIR)/TP1.o
+MAIN_OBJ = $(OBJ_DIR)/TP2.o
 
 # Ajouter les flags de compilation
 DEFINES= -DSYS_UNIX=1 
