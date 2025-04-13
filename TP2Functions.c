@@ -6,6 +6,13 @@
 #include <stdio.h>
 #include <ilcplex/cplex.h>
 
+/* Définitions des constantes pour la génération d'instances */
+#define B 1000            // Capacité maximale pour la contrainte 1
+#define G 1000             // Capacité maximale pour la contrainte 2
+#define N 100             // Nombre d’objets maximal
+#define FILENAME_PATTERN_TP2 "tp2_examples/n=%d_b=%d_g=%d.csv"
+#define FILENAME_SIZE 64
+
 int read_TP2_instance(FILE*fin,dataSet* dsptr)
 {
 	int rval = 0;
@@ -40,49 +47,6 @@ int read_TP2_instance(FILE*fin,dataSet* dsptr)
 	fprintf(stderr,"\n");
 
 	return rval;
-}
-
-void generateFiles_TP2() {
-    printf("Génération des fichiers d'instances pour 1DKP et 2DKP...\n");
-    char filename[FILENAME_SIZE];
-    
-    // 1DKP : Génération avec b et g
-    for(int b=0; b<=B; b+=20) {
-        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_1DKP, N, b);
-        ecrireDansCSV_2DKP(filename, b, b, N);
-    }
-    
-    for(int n=0; n<=N; n+=2) {
-        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_1DKP, n, B);
-        ecrireDansCSV_2DKP(filename, B, 0, n);
-    }
-}
-
-PoidsValeurFrais* genererPoidsValeursFrais(int n) {
-    srand(42);
-    PoidsValeurFrais* t = malloc(n * sizeof(PoidsValeurFrais));
-    for(int i=0; i<n; i++) {
-        t[i].valeur = rand()%100 +1;
-        t[i].poids = rand()%100 +1;
-        t[i].frais = rand()%100 +1;
-    }
-    return t;
-}
-
-void ecrireDansCSV_2DKP(const char* filename, int b, int g, int n) {
-    FILE* f = fopen(filename, "w");
-    PoidsValeurFrais* elements = genererPoidsValeursFrais(n);
-    
-    fprintf(f, "%d,%d,%d\n", n, b, g);
-    for(int i=0; i<n; i++) {
-        fprintf(f, "%d,%d,%d\n", 
-            elements[i].valeur,
-            elements[i].poids,
-            elements[i].frais);
-    }
-    
-    free(elements);
-    fclose(f);
 }
 
 int solve_1DKP(dataSet* dsptr)
@@ -403,51 +367,115 @@ int solve_2DKP(dataSet* dsptr)
 	return rval;
 }
 
-
-long long measure_execution_time_1DKP(const char* filename, dataSet* ds) {
-    FILE* fin = fopen(filename, "r");
-    if(!fin) return -1;
-    
-    long long start = get_time_us();
-    int rval = solve_1DKP(ds);
-    long long end = get_time_us();
-    
-    fclose(fin);
-    return (rval == 0) ? (end - start) : -1;
+/* ====================================================================
+   Fonction : get_time_us()
+   Renvoie le temps actuel en microsecondes.
+   ==================================================================== */
+long long get_time_us(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return ((long long)tv.tv_sec * 1000000LL) + tv.tv_usec;
 }
 
-void measure_1DKP_performance() {
-    FILE* fp = fopen("results_1DKP.csv", "w");
-    if (fp == NULL) {
-        fprintf(stderr, "Erreur lors de l'ouverture du fichier de résultats.\n");
-        return;
+/* ====================================================================
+   Génération d’instances pour TP2
+   Le format attendu dans le fichier :
+       Ligne 1 : n,b,g
+       Ensuite n lignes : c,a,f
+   ==================================================================== */
+void ecrireDansCSV_TP2(const char* filename, int b, int g, int n) {
+    FILE* f = fopen(filename, "w");
+    if (!f) {
+        fprintf(stderr, "Erreur d'ouverture du fichier %s pour écriture\n", filename);
+        exit(EXIT_FAILURE);
+    }
+    /* Génération des données avec graine fixe pour reproductibilité */
+    srand(42);
+    /* Écrire la première ligne */
+    fprintf(f, "%d,%d,%d\n", n, b, g);
+    for (int i = 0; i < n; i++) {
+        int c = rand() % 100 + 1; // Valeur entre 1 et 100
+        int a = rand() % 100 + 1; // Poids entre 1 et 100
+        int f_val = rand() % 100 + 1; // Frais entre 1 et 100
+        fprintf(f, "%d,%d,%d\n", c, a, f_val);
+    }
+    fclose(f);
+}
+
+/* Fonction qui génère deux séries d'instances pour TP2 :
+   - Expérience 1 : n fixé (N) et b (et g) variant.
+   - Expérience 2 : b et g fixés (B et G) et n variant.
+ */
+void generateFiles_TP2() {
+    char filename[FILENAME_SIZE];
+    printf("Génération des instances TP2...\n");
+    
+    // Expérience 1 : n constant, b et g variant de 0 à B par pas de 20.
+    for (int b_val = 0; b_val <= B; b_val += 20) {
+        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_TP2, N, b_val, b_val);
+        ecrireDansCSV_TP2(filename, b_val, b_val, N);
     }
     
-    // En-tête du fichier CSV
-    fprintf(fp, "Test,n,b,temps(us),solution\n");
+    // Expérience 2 : b et g fixés et n variant de 0 à N par pas de 2.
+    for (int n_val = 0; n_val <= N; n_val += 2) {
+        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_TP2, n_val, B, G);
+        ecrireDansCSV_TP2(filename, B, G, n_val);
+    }
+}
+
+/* ====================================================================
+   Mesure du temps d'exécution de solve_1DKP()
+   Cette fonction lit une instance depuis le fichier donné, puis
+   exécute solve_1DKP() sur l'instance en mesurant le temps.
+   ==================================================================== */
+long long measure_execution_time_1DKP(const char* instance_filename, dataSet* ds_ptr) {
+    FILE* fin = fopen(instance_filename, "r");
+    if (!fin) {
+        fprintf(stderr, "Erreur lors de l'ouverture du fichier d'instance %s\n", instance_filename);
+        return -1;
+    }
+    if (read_TP2_instance(fin, ds_ptr) != 0) {
+        fclose(fin);
+        return -1;
+    }
+    fclose(fin);
+    long long start = get_time_us();
+    int rval = solve_1DKP(ds_ptr);
+    long long end = get_time_us();
+    if (rval != 0) {
+        fprintf(stderr, "Erreur lors de la résolution par solve_1DKP sur l'instance %s\n", instance_filename);
+        return -1;
+    }
+    return end - start;
+}
+
+/* ====================================================================
+   Mesure globale et écriture des résultats de solve_1DKP dans un CSV.
+   Deux séries de tests :
+     - Expérience 1 : n fixé (N) et b variant (et g variant de même manière).
+     - Expérience 2 : b fixé (B, G) et n variant.
+   ==================================================================== */
+void measure_1DKP_performance_TP2() {
+    char csv_filename[] = "results_TP2_1DKP.csv";
+    FILE* fp = fopen(csv_filename, "w");
+    if (!fp) {
+        fprintf(stderr, "Erreur à l'ouverture du fichier %s pour écriture\n", csv_filename);
+        exit(EXIT_FAILURE);
+    }
+    fprintf(fp, "Test,n,b,g,temps_us,objectif\n");
     
     dataSet ds;
-    char filename[FILENAME_SIZE];
-    long long t;
+    char instance_file[FILENAME_SIZE];
+    long long elapsed;
     
-    // -------------------------------------------------
-    // Test 1 : n fixe (n = N) et b variant (de 0 à B, pas 20)
-    // -------------------------------------------------
-    for(int b = 0; b <= B; b += 20) {
-        // Création de l'instance avec n fixé à N et b variant
-        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_1DKP, N, b);
-        
-        // Mesure du temps d'exécution pour l'instance courante
-        t = measure_execution_time_1DKP(filename, &ds);
-        if(t < 0) {
-            fprintf(stderr, "Erreur lors du traitement de l'instance %s.\n", filename);
+    // Expérience 1 : n fixe à N, b et g variant de 0 à B (pas 20)
+    for (int b_val = 0; b_val <= B; b_val += 20) {
+        snprintf(instance_file, FILENAME_SIZE, FILENAME_PATTERN_TP2, N, b_val, b_val);
+        elapsed = measure_execution_time_1DKP(instance_file, &ds);
+        if (elapsed >= 0) {
+            fprintf(fp, "n_fixé,%d,%d,%d,%lld,%.2f\n", N, b_val, b_val, elapsed, ds.master.objval);
         }
-        
-        // Enregistrement des résultats dans le fichier CSV
-        fprintf(fp, "n_fixé,%d,%d,%lld,%.2f\n", 
-                N, b, t, ds.master.objval);
-        
-        // Nettoyage : libération de la mémoire et fermeture de l'environnement CPLEX
+        /* Libération des tableaux alloués dans ds et fermeture de l'environnement CPLEX */
         free(ds.c);
         free(ds.a);
         free(ds.f);
@@ -455,24 +483,13 @@ void measure_1DKP_performance() {
         CPXcloseCPLEX(&ds.master.env);
     }
     
-    // -------------------------------------------------
-    // Test 2 : b fixe (b = B) et n variant (de 0 à N, pas 2)
-    // -------------------------------------------------
-    for(int n = 0; n <= N; n += 2) {
-        // Création de l'instance avec b fixé à B et n variant
-        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_1DKP, n, B);
-        
-        // Mesure du temps d'exécution pour l'instance courante
-        t = measure_execution_time_1DKP(filename, &ds);
-        if(t < 0) {
-            fprintf(stderr, "Erreur lors du traitement de l'instance %s.\n", filename);
+    // Expérience 2 : b et g fixés à B et G, n variant de 0 à N (pas 2)
+    for (int n_val = 0; n_val <= N; n_val += 2) {
+        snprintf(instance_file, FILENAME_SIZE, FILENAME_PATTERN_TP2, n_val, B, G);
+        elapsed = measure_execution_time_1DKP(instance_file, &ds);
+        if (elapsed >= 0) {
+            fprintf(fp, "b_fixé,%d,%d,%d,%lld,%.2f\n", n_val, B, G, elapsed, ds.master.objval);
         }
-        
-        // Enregistrement des résultats dans le fichier CSV
-        fprintf(fp, "b_fixé,%d,%d,%lld,%.2f\n", 
-                n, B, t, ds.master.objval);
-        
-        // Nettoyage : libération de la mémoire et fermeture de l'environnement CPLEX
         free(ds.c);
         free(ds.a);
         free(ds.f);
@@ -481,4 +498,5 @@ void measure_1DKP_performance() {
     }
     
     fclose(fp);
+    printf("Résultats des performances de solve_1DKP écrits dans %s\n", csv_filename);
 }
