@@ -42,6 +42,49 @@ int read_TP2_instance(FILE*fin,dataSet* dsptr)
 	return rval;
 }
 
+void generateFiles_TP2() {
+    printf("Génération des fichiers d'instances pour 1DKP et 2DKP...\n");
+    char filename[FILENAME_SIZE];
+    
+    // 1DKP : Génération avec b et g
+    for(int b=0; b<=B; b+=20) {
+        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_1DKP, N, b);
+        ecrireDansCSV_2DKP(filename, b, b, N);
+    }
+    
+    for(int n=0; n<=N; n+=2) {
+        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_1DKP, n, B);
+        ecrireDansCSV_2DKP(filename, B, 0, n);
+    }
+}
+
+PoidsValeurFrais* genererPoidsValeursFrais(int n) {
+    srand(42);
+    PoidsValeurFrais* t = malloc(n * sizeof(PoidsValeurFrais));
+    for(int i=0; i<n; i++) {
+        t[i].valeur = rand()%100 +1;
+        t[i].poids = rand()%100 +1;
+        t[i].frais = rand()%100 +1;
+    }
+    return t;
+}
+
+void ecrireDansCSV_2DKP(const char* filename, int b, int g, int n) {
+    FILE* f = fopen(filename, "w");
+    PoidsValeurFrais* elements = genererPoidsValeursFrais(n);
+    
+    fprintf(f, "%d,%d,%d\n", n, b, g);
+    for(int i=0; i<n; i++) {
+        fprintf(f, "%d,%d,%d\n", 
+            elements[i].valeur,
+            elements[i].poids,
+            elements[i].frais);
+    }
+    
+    free(elements);
+    fclose(f);
+}
+
 int solve_1DKP(dataSet* dsptr)
 {
     int rval = 0;
@@ -360,3 +403,82 @@ int solve_2DKP(dataSet* dsptr)
 	return rval;
 }
 
+
+long long measure_execution_time_1DKP(const char* filename, dataSet* ds) {
+    FILE* fin = fopen(filename, "r");
+    if(!fin) return -1;
+    
+    long long start = get_time_us();
+    int rval = solve_1DKP(ds);
+    long long end = get_time_us();
+    
+    fclose(fin);
+    return (rval == 0) ? (end - start) : -1;
+}
+
+void measure_1DKP_performance() {
+    FILE* fp = fopen("results_1DKP.csv", "w");
+    if (fp == NULL) {
+        fprintf(stderr, "Erreur lors de l'ouverture du fichier de résultats.\n");
+        return;
+    }
+    
+    // En-tête du fichier CSV
+    fprintf(fp, "Test,n,b,temps(us),solution\n");
+    
+    dataSet ds;
+    char filename[FILENAME_SIZE];
+    long long t;
+    
+    // -------------------------------------------------
+    // Test 1 : n fixe (n = N) et b variant (de 0 à B, pas 20)
+    // -------------------------------------------------
+    for(int b = 0; b <= B; b += 20) {
+        // Création de l'instance avec n fixé à N et b variant
+        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_1DKP, N, b);
+        
+        // Mesure du temps d'exécution pour l'instance courante
+        t = measure_execution_time_1DKP(filename, &ds);
+        if(t < 0) {
+            fprintf(stderr, "Erreur lors du traitement de l'instance %s.\n", filename);
+        }
+        
+        // Enregistrement des résultats dans le fichier CSV
+        fprintf(fp, "n_fixé,%d,%d,%lld,%.2f\n", 
+                N, b, t, ds.master.objval);
+        
+        // Nettoyage : libération de la mémoire et fermeture de l'environnement CPLEX
+        free(ds.c);
+        free(ds.a);
+        free(ds.f);
+        CPXfreeprob(ds.master.env, &ds.master.lp);
+        CPXcloseCPLEX(&ds.master.env);
+    }
+    
+    // -------------------------------------------------
+    // Test 2 : b fixe (b = B) et n variant (de 0 à N, pas 2)
+    // -------------------------------------------------
+    for(int n = 0; n <= N; n += 2) {
+        // Création de l'instance avec b fixé à B et n variant
+        snprintf(filename, FILENAME_SIZE, FILENAME_PATTERN_1DKP, n, B);
+        
+        // Mesure du temps d'exécution pour l'instance courante
+        t = measure_execution_time_1DKP(filename, &ds);
+        if(t < 0) {
+            fprintf(stderr, "Erreur lors du traitement de l'instance %s.\n", filename);
+        }
+        
+        // Enregistrement des résultats dans le fichier CSV
+        fprintf(fp, "b_fixé,%d,%d,%lld,%.2f\n", 
+                n, B, t, ds.master.objval);
+        
+        // Nettoyage : libération de la mémoire et fermeture de l'environnement CPLEX
+        free(ds.c);
+        free(ds.a);
+        free(ds.f);
+        CPXfreeprob(ds.master.env, &ds.master.lp);
+        CPXcloseCPLEX(&ds.master.env);
+    }
+    
+    fclose(fp);
+}

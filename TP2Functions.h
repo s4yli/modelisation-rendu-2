@@ -69,9 +69,16 @@ typedef struct dataSet
 
 } dataSet;
 
+typedef struct {
+    int valeur;
+    int poids;
+    int frais;
+} PoidsValeurFrais;
 
 int read_TP2_instance(FILE*fin,dataSet* dsptr);
 int solve_2DKP(dataSet* dsptr);
 int solve_1DKP(dataSet* dsptr);
-
+void generateFiles_TP2();
+void ecrireDansCSV_2DKP(const char* filename, int b, int g, int n);
+PoidsValeurFrais* genererPoidsValeursFrais(int n);
 
